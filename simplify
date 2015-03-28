@@ -1,0 +1,132 @@
+#!/usr/bin/env python
+from __future__ import print_function
+import string, sys
+from lxml import etree
+
+# TODO:
+#   simplify act/scene elements
+#   look for other head elements
+#   line elements for "over hill, over dale"
+#   strip line element texts
+#   strip ab element texts
+#   commas at start of stage element texts
+#   merge composite stage elements (e.g. "The Lion roars.")
+#   app, rdg, anchor, title elements
+#   hunt for other elements
+#   simplify header
+#   don't need body and text elements
+#   put back play title
+#   get rid of split in "looked with cheer"
+#   when though wak'st
+#   be as thou wast want
+#   bottom's dream
+#   videlicet
+#   SDs at start of lines
+
+def log(s):
+    print(s, file=sys.stderr)
+
+def remove_newlines(s):
+    if is_empty(s):
+        return s
+    return s.replace('\n', '')
+
+def is_empty(s):
+    return not s or s.strip() == ''
+
+def has_tail(e):
+    return e.tail and not is_empty(e.tail)
+
+def add_tail(e, s):
+    if e.tail:
+        e.tail = e.tail + ' ' + s
+    else:
+        e.tail = s
+
+def add_text(e, s):
+    if e.text:
+        e.text = e.text + ' ' + s
+    else:
+        e.text = s
+
+def splice_out(e):
+    parent = e.getparent()
+    prev = e.getprevious()
+    content = (e.text or '') + (e.tail or '')
+    if prev is not None:
+        add_tail(prev, content)
+    else:
+        add_text(parent, content)
+    parent.remove(e)
+
+def move_children(from_parent, to_parent):
+    last = None
+    for e in from_parent.iterchildren():
+        from_parent.remove(e)
+        to_parent.append(e)
+        last = e
+    return last
+
+tree = etree.parse(sys.stdin)
+
+etree.strip_tags(tree, 'w', 'c', 'pc', 'persName', 'p', 'seg')
+etree.strip_elements(tree, 'front', 'revisionDesc', 'encodingDesc', 'fileDesc',
+                     'langUsage', 'pb', 'sex', 'personGrp', 'fw', 'back')
+
+for e in tree.xpath("//stage"):
+    del e.attrib['n']
+    del e.attrib['type']
+
+for e in tree.iter():
+    e.text = remove_newlines(e.text)
+    e.tail = remove_newlines(e.tail)
+    for a in ['corresp', 'id', 'who']:
+        if a in e.attrib:
+            del e.attrib[a]
+
+for e in tree.xpath("//milestone[@unit='page' or @type='stanza' or @unit='ftln' and @ana='#prose']"):
+    splice_out(e)
+
+for e in tree.xpath("//milestone[@unit='ftln']"):
+    if e.attrib['ana'] in ['#verse', '#short', '#quatrain']:
+        line = etree.Element('line')
+        line.text = e.tail
+        line.tail = '\n'
+
+        if 'prev' in e.attrib:
+            line.attrib['cont'] = 'true'
+
+        parent = e.getparent()
+        for s in e.itersiblings():
+            parent.remove(s)
+            if s.tag == 'lb':
+                break
+            if is_empty(s.tail):
+                s.tail = None
+            line.append(s)
+        parent.replace(e, line)
+
+for e in tree.xpath("//line[@cont='true']"):
+    prev = e.getprevious()
+    if prev is not None and prev.tag == 'line':
+        line = etree.Element('line')
+        line.text = prev.text
+        line.tail = '\n'
+
+        last_child = move_children(prev, line)
+
+        if last_child is not None:
+            add_tail(last_child, e.text)
+        else:
+            add_text(line, e.text)
+
+        move_children(e, line)
+
+        parent = e.getparent()
+        parent.remove(prev)
+        parent.replace(e, line)
+
+for e in tree.xpath("//div1/head"):
+
+
+print(etree.tostring(tree, pretty_print=True))

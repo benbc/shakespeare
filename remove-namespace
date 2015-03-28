@@ -1,0 +1,3 @@
+#!/bin/bash -eu
+
+sed -e 's| xmlns="http://www.tei-c.org/ns/1.0"||' | sed -e 's/xml://'

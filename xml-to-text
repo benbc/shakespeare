@@ -1,0 +1,116 @@
+#!/usr/bin/env python
+from __future__ import print_function
+import sys
+from lxml import etree
+
+def log(s):
+    print(s, file=sys.stderr)
+
+def render_scene(head, scene):
+    print()
+    print(head)
+    for e in scene:
+        if e.tag == 'stage':
+            render_stage_top(e)
+        elif e.tag == 'sp':
+            render_speech(e)
+
+def render_stage_top(stage):
+    print()
+    render_stage(stage)
+    print()
+
+def render_stage_in_speech(stage):
+    render_stage(stage, indent=True)
+    print()
+
+def render_stage(stage, indent=False):
+    if indent:
+        pad = pad_length()
+    else:
+        pad = 0
+    print(' ' * pad + format_stage(stage), end='')
+
+def format_stage(stage):
+    return '[%s]' % stage.text
+
+def render_speech(speech):
+    print()
+    render_prefix(speech.find('speaker'))
+    # can there be stage directions at this point?
+    render_words(speech.find('ab'))
+
+def render_prefix(speaker):
+    print(speaker.text.ljust(max_name_length() + 1), end='')
+
+def render_words(words):
+    prose_lines = (words.text or '').strip()
+    if prose_lines:
+        render_prose(prose_lines, True)
+    first = not prose_lines
+    after_prose = prose_lines
+    after_verse = False
+    last = None
+    for e in words:
+        last = e
+        if e.tag == 'line':
+            if after_prose:
+                after_prose = False
+                print()
+            render_verse_line(e, first)
+            first = False
+            after_verse = True
+        if e.tag == 'stage':
+            render_stage_in_speech(e)
+    if last is not None:
+        prose_lines = (last.tail or '').strip()
+        if prose_lines:
+            if after_verse:
+                print()
+            render_prose(prose_lines, False)
+
+last_verse_line = None
+def render_verse_line(line, first):
+    global last_verse_line
+    parts = [(line.text or '').strip()]
+    for e in line:
+        if e.tag == 'stage':
+            parts.append(format_stage(e))
+            parts.append(e.tail or '')
+        else:
+            log("Unknown element: " + e.tag)
+    whole = ' '.join(parts)
+    if 'cont' in line.attrib and last_verse_line:
+        extra_indent = len(last_verse_line) + 1
+    else:
+        extra_indent = 0
+    render_line(whole, indent=(not first), extra_indent=extra_indent)
+    last_verse_line = whole
+
+def render_prose(text, start):
+    lines = text.splitlines()
+    render_line(lines[0], indent=(not start))
+    for line in lines[1:]:
+        render_line(line, indent=True)
+
+def render_line(line, indent, extra_indent=0):
+    if indent:
+        pad = pad_length()
+    else:
+        pad = 1
+    print( (pad + extra_indent) * ' ' + line.strip())
+
+def pad_length():
+    return max_name_length() + 2
+
+def max_name_length():
+    return len('PEASEBLOSSOM')
+
+tree = etree.parse(sys.stdin)
+
+for a in tree.xpath("//div1[@type='act']"):
+    act = a.attrib['n']
+    for s in a.xpath(".//div2[@type='scene']"):
+        scene = s.attrib['n']
+        head = "Act %s Scene %s" % (act, scene)
+        render_scene(head, s)

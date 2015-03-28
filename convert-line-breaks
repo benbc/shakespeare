@@ -1,0 +1,4 @@
+#!/bin/bash -eu
+
+sed -e 's|<lb/>|\
+|g'
