@@ -71,7 +71,8 @@ tree = etree.parse(sys.stdin)
 
 etree.strip_tags(tree, 'w', 'c', 'pc', 'persName', 'p', 'seg')
 etree.strip_elements(tree, 'front', 'revisionDesc', 'encodingDesc', 'fileDesc',
-                     'langUsage', 'pb', 'sex', 'personGrp', 'fw', 'back')
+                     'langUsage', 'pb', 'sex', 'personGrp', 'fw', 'back', 'app',
+                     'anchor', 'title')
 
 for e in tree.xpath("//stage"):
     del e.attrib['n']
