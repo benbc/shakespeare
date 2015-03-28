@@ -126,7 +126,4 @@ for e in tree.xpath("//line[@cont='true']"):
         parent.remove(prev)
         parent.replace(e, line)
 
-for e in tree.xpath("//div1/head"):
-
-
 print(etree.tostring(tree, pretty_print=True))
