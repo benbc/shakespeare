@@ -41,7 +41,22 @@ class Act:
         self.scenes = []
 
 class Scene:
-    pass
+    def __init__(self):
+        self.pieces = []
+
+class Direction:
+    def __init__(self):
+        self.text = Text()
+
+class Text():
+    def __init__(self):
+        self.content = ''
+    def append(self, text):
+        self.content = self.content + text
+    def __str__(self):
+        return unicode(self).encode('utf-8')
+    def __unicode__(self):
+        return u''.join(self.content)
 
 play = Play()
 
@@ -150,9 +165,39 @@ def read_act():
 
 def read_scene(act):
     def each():
-        act.scenes.append(Scene())
-        return skip_all
+        scene = Scene()
+        act.scenes.append(scene)
+        return skip('head', read_direction(scene, give_up))
     return each
+
+def read_direction(scene, next):
+    direction = Direction()
+    scene.pieces.append(direction)
+    def add_text(event, e):
+        if event == 'end':
+            direction.text.append(e.text)
+        return 'continue'
+    return each_within('stage', ['w', 'c', 'pc'], add_text, next)
+
+def each_within(container, targets, each, next):
+    def consumer(end):
+        def handler(event, e):
+            if event == 'end' and tag(e) == end:
+                each(event, e)
+                return finder
+            else:
+                return each(event, e)
+        return handler
+    def finder(event, e):
+        if event == 'start' and tag(e) == container:
+            return 'continue'
+        elif event == 'end' and tag(e) == container:
+            return next
+        elif event == 'start' and tag(e) in targets:
+            return consumer(tag(e))
+        else:
+            return 'unexpected'
+    return finder
 
 def main():
     handler = sequence([
@@ -185,6 +230,9 @@ def main():
     print(play.title)
     for act in play.acts:
         print("Act with %s scenes" % len(act.scenes))
+        for scene in act.scenes:
+            for piece in scene.pieces:
+                print(piece.text)
 
 if __name__ == '__main__':
     main()
