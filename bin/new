@@ -93,7 +93,6 @@ def read_title(next):
 def read_person():
     part = Part()
     def extract_state(event, e):
-        trace(event, e)
         if event == 'end' and tag(e) == 'p':
             part.detail = e.text
         return 'continue'
@@ -108,14 +107,25 @@ def read_person():
             return 'continue'
     return top_level
 
+def sequence(operations):
+    acc = None
+    for op, args in reversed(operations):
+        if acc:
+            acc = op(*((args+[acc])))
+        else:
+            acc = op(*args)
+    return acc
+
 def main():
-    handler = descend_to('title',
-                         read_title(
-                             leave('fileDesc',
-                                   skip('encodingDesc',
-                                        within('profileDesc',
-                                               find_within('particDesc', 'person', read_person,
-                                                    give_up))))))
+    handler = sequence([
+        (descend_to, ['title']),
+        (read_title, []),
+        (leave, ['fileDesc']),
+        (skip, ['encodingDesc']),
+        (within, ['profileDesc']),
+        (find_within, ['particDesc', 'person', read_person]),
+        (lambda: give_up, [])
+    ])
 
     for event, e in iterparse(sys.stdin, events=("start", "end")):
         next = handler(event, e)
@@ -155,3 +165,4 @@ if __name__ == '__main__':
 
 # Limitations
 #   - ignores unnamed groups (e.g. "Lords and Attendants" in MND)
+#   - ignores part group names (e.g. "four lover" in MND)
