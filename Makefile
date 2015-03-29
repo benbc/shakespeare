@@ -1,11 +1,15 @@
 .RECIPEPREFIX = >
 
-out/mnd.txt: tmp/mnd.xml
-> @mkdir -p out
-> <$< PYTHONIOENCODING=utf-8 ./xml-to-text >$@
+new:
+> PYTHONIOENCODING=utf-8 <original/mnd.xml bin/new
 
-tmp/mnd.xml: remove-blank-lines convert-line-breaks strip-lines
-tmp/mnd.xml: original/mnd.xml Makefile remove-namespace simplify convert-quotes
+out/mnd.txt: tmp/mnd.xml bin/xml-to-text
+> @mkdir -p out
+> <$< PYTHONIOENCODING=utf-8 bin/xml-to-text >$@
+
+tmp/mnd.xml: Makefile bin/remove-namespace bin/simplify bin/convert-quotes
+tmp/mnd.xml: bin/remove-blank-lines bin/convert-line-breaks bin/strip-lines
+tmp/mnd.xml: original/mnd.xml
 > @mkdir -p tmp
-> <$< ./remove-namespace | ./convert-quotes | ./simplify | \
->     ./convert-line-breaks | ./strip-lines | ./remove-blank-lines >$@
+> <$< bin/remove-namespace | bin/convert-quotes | bin/simplify | \
+>     bin/convert-line-breaks | bin/strip-lines | bin/remove-blank-lines >$@

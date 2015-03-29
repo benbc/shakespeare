@@ -1,0 +1,157 @@
+#!/usr/bin/python
+from __future__ import print_function
+import sys
+import types
+from xml.etree.ElementTree import iterparse
+
+class Play:
+    def __init__(self):
+        self.parts = []
+
+class Part:
+    def __init__(self):
+        self.name = 'Unnamed'
+        self.detail = None
+    def __str__(self):
+        return unicode(self).encode('utf-8')
+    def __unicode__(self):
+        if self.detail:
+            return u"%s (%s)" % (self.name, self.detail)
+        return self.name
+
+play = Play()
+
+def descend_to(target, next):
+    def handler(event, e):
+        if event == 'start' and tag(e) == target:
+            return next
+        else:
+            return 'continue'
+    return handler
+
+def leave(target, next):
+    def handler(event, e):
+        if event == 'end' and tag(e) == target:
+            return next
+        else:
+            return 'continue'
+    return handler
+
+def skip(target, next):
+    started = box(False)
+    def handler(event, e):
+        if not started.value:
+            if event == 'start' and tag(e) == target:
+                started.value = True
+                return 'continue'
+            else:
+                return 'unexpected'
+        else:
+            if event == 'end' and tag(e) == target:
+                return next
+            else:
+                return 'continue'
+    return handler
+
+def give_up(event, e):
+    return None
+
+def within(target, next):
+    def handler(event, e):
+        if event == 'start' and tag(e) == target:
+            return next
+        else:
+            return 'unexpected'
+    return handler
+
+def find_within(container, target, each, next):
+    def consumer(wrapped):
+        def handler(event, e):
+            if event == 'end' and tag(e) == target:
+                return finder
+            else:
+                return consumer(wrapped(event, e))
+        if type(wrapped) is types.FunctionType:
+            return handler
+        else:
+            return wrapped
+    def finder(event, e):
+        if event == 'end' and tag(e) == container:
+            return next
+        elif event == 'start' and tag(e) == target:
+            return consumer(each())
+        else:
+            return 'continue'
+    return finder
+
+def read_title(next):
+    def handler(event, e):
+        play.title = e.text
+        return next
+    return handler
+
+def read_person():
+    part = Part()
+    def extract_state(event, e):
+        trace(event, e)
+        if event == 'end' and tag(e) == 'p':
+            part.detail = e.text
+        return 'continue'
+    def top_level(event, e):
+        if event == 'end' and tag(e) == 'name':
+            part.name = e.text
+            play.parts.append(part)
+            return 'continue'
+        elif event == 'start' and tag(e) == 'state':
+            return extract_state
+        else:
+            return 'continue'
+    return top_level
+
+def main():
+    handler = descend_to('title',
+                         read_title(
+                             leave('fileDesc',
+                                   skip('encodingDesc',
+                                        within('profileDesc',
+                                               find_within('particDesc', 'person', read_person,
+                                                    give_up))))))
+
+    for event, e in iterparse(sys.stdin, events=("start", "end")):
+        next = handler(event, e)
+        if next == 'continue':
+            continue
+        elif next == 'unexpected':
+            log("unexpected: %s(%s)" % (tag(e), event))
+            break
+        elif next == None:
+            log("gave up: %s(%s)" % (tag(e), event))
+            break
+        else:
+            handler = next
+
+    print(play.title)
+    for part in play.parts:
+        print(part)
+
+class box:
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return "box(%s)" % str(self.value)
+
+def log(s):
+    print(s, file=sys.stderr)
+
+def trace(event, e):
+    log("trace: %s(%s)" % (tag(e), event))
+
+def tag(e):
+    return e.tag.replace("{http://www.tei-c.org/ns/1.0}", "")
+
+if __name__ == '__main__':
+    main()
+
+# Limitations
+#   - ignores unnamed groups (e.g. "Lords and Attendants" in MND)
